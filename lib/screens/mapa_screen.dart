@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../models/avistamiento.dart';
+import '../services/firestore_service.dart';
 import 'reportar_screen.dart';
 
 class MapaScreen extends StatefulWidget {
@@ -12,92 +14,196 @@ class MapaScreen extends StatefulWidget {
 }
 
 class _MapaScreenState extends State<MapaScreen> {
-
   /// controlador del mapa
-  /// permite mover la cámara o hacer zoom programáticamente
   GoogleMapController? mapController;
 
-  /// set de marcadores que se dibujan en el mapa
+  /// servicio de firestore
+  final FirestoreService firestoreService = FirestoreService();
+
+  /// marcadores visibles en el mapa
   Set<Marker> markers = {};
 
-  /// posición que el usuario selecciona al tocar el mapa
+  /// posición seleccionada para nuevo reporte
   LatLng? posicionSeleccionada;
 
-  /// ubicación actual del usuario obtenida por GPS
+  /// ubicación actual del usuario
   LatLng? ubicacionActual;
 
-  /// ubicación inicial (fallback) si aún no se obtiene GPS
+  /// fallback inicial
   final LatLng ubicacionInicial = const LatLng(-39.8142, -73.2459);
+
+  /// estado de carga
+  bool cargando = true;
 
   @override
   void initState() {
     super.initState();
-
-    /// cuando se abre la pantalla
-    /// intentamos obtener la ubicación del usuario
-    obtenerUbicacion();
+    iniciarMapa();
   }
 
-  /// obtiene la ubicación actual usando GPS
-  Future obtenerUbicacion() async {
+  Future<void> iniciarMapa() async {
+    try {
+      await obtenerUbicacion();
+      await cargarAvistamientosCercanos();
+    } catch (e) {
+      debugPrint("Error al iniciar mapa: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          cargando = false;
+        });
+      }
+    }
+  }
 
-    /// solicitar permiso de ubicación
-    LocationPermission permiso = await Geolocator.requestPermission();
+  Future<void> obtenerUbicacion() async {
+    final bool servicioHabilitado =
+        await Geolocator.isLocationServiceEnabled();
 
-    /// obtener posición actual
-    Position posicion = await Geolocator.getCurrentPosition(
+    if (!servicioHabilitado) {
+      throw Exception("El servicio de ubicación está deshabilitado");
+    }
+
+    LocationPermission permiso = await Geolocator.checkPermission();
+
+    if (permiso == LocationPermission.denied) {
+      permiso = await Geolocator.requestPermission();
+    }
+
+    if (permiso == LocationPermission.denied) {
+      throw Exception("Permiso de ubicación denegado");
+    }
+
+    if (permiso == LocationPermission.deniedForever) {
+      throw Exception("Permiso de ubicación denegado permanentemente");
+    }
+
+    final Position posicion = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
     );
 
-    LatLng nuevaUbicacion = LatLng(
+    final LatLng nuevaUbicacion = LatLng(
       posicion.latitude,
       posicion.longitude,
     );
 
-    setState(() {
-      ubicacionActual = nuevaUbicacion;
-    });
+    debugPrint(
+      "Ubicación actual obtenida: ${nuevaUbicacion.latitude}, ${nuevaUbicacion.longitude}",
+    );
 
-    /// mover la cámara del mapa hacia la ubicación actual
-    if (mapController != null) {
-
-      mapController!.animateCamera(
-        CameraUpdate.newLatLngZoom(nuevaUbicacion, 16),
-      );
-
+    if (mounted) {
+      setState(() {
+        ubicacionActual = nuevaUbicacion;
+      });
     }
 
+    if (mapController != null) {
+      await mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(nuevaUbicacion, 16),
+      );
+    }
   }
 
-  /// se ejecuta cuando el usuario toca el mapa
+  Future<void> cargarAvistamientosCercanos() async {
+    final LatLng centro = ubicacionActual ?? ubicacionInicial;
+
+    debugPrint(
+      "Centro de búsqueda: ${centro.latitude}, ${centro.longitude}",
+    );
+
+    final List<Avistamiento> avistamientos =
+        await firestoreService.obtenerAvistamientosCercanos(
+      lat: centro.latitude,
+      lng: centro.longitude,
+    );
+
+    debugPrint(
+      "Cantidad de avistamientos encontrados: ${avistamientos.length}",
+    );
+
+    final Set<Marker> nuevosMarkers = avistamientos.map((av) {
+      debugPrint("Creando marker para ${av.id} en ${av.lat}, ${av.lng}");
+
+      return Marker(
+        markerId: MarkerId(av.id),
+        position: LatLng(av.lat, av.lng),
+        icon: BitmapDescriptor.defaultMarkerWithHue(
+          BitmapDescriptor.hueRed,
+        ),
+        infoWindow: InfoWindow(
+          title: "Avistamiento",
+          snippet: av.etiquetas.isNotEmpty
+              ? av.etiquetas.map((e) => e.name).join(", ")
+              : "Sin etiquetas",
+        ),
+      );
+    }).toSet();
+
+    if (posicionSeleccionada != null) {
+      nuevosMarkers.add(
+        Marker(
+          markerId: const MarkerId("nuevo_avistamiento"),
+          position: posicionSeleccionada!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueAzure,
+          ),
+          infoWindow: const InfoWindow(
+            title: "Nuevo reporte",
+          ),
+        ),
+      );
+    }
+
+    if (mounted) {
+      setState(() {
+        markers = nuevosMarkers;
+      });
+    }
+
+    debugPrint("Cantidad total de markers dibujados: ${markers.length}");
+
+    /// para probar visualmente:
+    /// si hay al menos un avistamiento, centra el mapa en el primero
+    if (avistamientos.isNotEmpty && mapController != null) {
+      final primerPunto = LatLng(avistamientos.first.lat, avistamientos.first.lng);
+
+      await mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(primerPunto, 18),
+      );
+
+      debugPrint(
+        "Cámara movida al primer avistamiento: ${primerPunto.latitude}, ${primerPunto.longitude}",
+      );
+    }
+  }
+
   void tocarMapa(LatLng posicion) {
-
     setState(() {
-
-      /// guardamos la posición tocada
       posicionSeleccionada = posicion;
 
-      /// eliminamos marcadores anteriores
-      markers.clear();
+      markers.removeWhere(
+        (marker) => marker.markerId.value == "nuevo_avistamiento",
+      );
 
-      /// agregamos marcador temporal
       markers.add(
         Marker(
           markerId: const MarkerId("nuevo_avistamiento"),
           position: posicion,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueAzure,
+          ),
+          infoWindow: const InfoWindow(
+            title: "Nuevo reporte",
+          ),
         ),
       );
-
     });
-
   }
 
-  /// abre la pantalla para reportar el avistamiento
-  void abrirReportar() {
-
+  Future<void> abrirReportar() async {
     if (posicionSeleccionada == null) return;
 
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ReportarScreen(
@@ -107,49 +213,60 @@ class _MapaScreenState extends State<MapaScreen> {
       ),
     );
 
+    if (mounted) {
+      setState(() {
+        posicionSeleccionada = null;
+      });
+    }
+
+    await cargarAvistamientosCercanos();
+  }
+
+  Future<void> recentrarMapa() async {
+    try {
+      await obtenerUbicacion();
+      await cargarAvistamientosCercanos();
+    } catch (e) {
+      debugPrint("Error al recentrar mapa: $e");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (cargando) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("Mapa de animales"),
       ),
-
-      /// usamos stack para poder poner elementos sobre el mapa
       body: Stack(
         children: [
-
-          /// mapa principal
           GoogleMap(
-
-            /// posición inicial del mapa
             initialCameraPosition: CameraPosition(
               target: ubicacionActual ?? ubicacionInicial,
               zoom: 14,
             ),
-
-            /// habilita el punto azul del usuario
             myLocationEnabled: true,
-
-            /// botón que centra en tu ubicación
             myLocationButtonEnabled: true,
-
-            /// marcadores que se dibujan en el mapa
             markers: markers,
-
-            /// evento cuando el usuario toca el mapa
             onTap: tocarMapa,
-
-            /// cuando el mapa se crea guardamos el controlador
-            onMapCreated: (controller) {
+            onMapCreated: (controller) async {
               mapController = controller;
-            },
 
+              if (ubicacionActual != null) {
+                await controller.animateCamera(
+                  CameraUpdate.newLatLngZoom(ubicacionActual!, 16),
+                );
+              }
+            },
           ),
 
-          /// botón para confirmar el lugar del reporte
           if (posicionSeleccionada != null)
             Positioned(
               bottom: 30,
@@ -161,10 +278,17 @@ class _MapaScreenState extends State<MapaScreen> {
               ),
             ),
 
+          Positioned(
+            top: 16,
+            right: 16,
+            child: FloatingActionButton(
+              mini: true,
+              onPressed: recentrarMapa,
+              child: const Icon(Icons.my_location),
+            ),
+          ),
         ],
       ),
     );
-
   }
-
 }
