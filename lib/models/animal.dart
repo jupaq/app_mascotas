@@ -7,8 +7,8 @@ enum EspecieAnimal {
 enum EstadoAnimal {
   callejero,
   conDueno,
-  perdido,
-  rescatado,
+  abandonado,
+  enAdopcion,
   adoptado
 }
 

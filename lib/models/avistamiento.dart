@@ -5,7 +5,6 @@ enum EtiquetaAvistamiento {
   herido,
   malEstado,
   hambriento,
-  abandonado
 }
 
 class Avistamiento {
@@ -14,7 +13,7 @@ class Avistamiento {
   double lat;
   double lng;
   String foto;
-  EtiquetaAvistamiento etiqueta;
+  List<EtiquetaAvistamiento> etiquetas;
   DateTime fecha;
 
   Avistamiento({
@@ -23,31 +22,7 @@ class Avistamiento {
     required this.lat,
     required this.lng,
     required this.foto,
-    required this.etiqueta,
+    required this.etiquetas,
     required this.fecha,
   });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'animalId': animalId,
-      'lat': lat,
-      'lng': lng,
-      'foto': foto,
-      'etiqueta': etiqueta.name,
-      'fecha': fecha.toIso8601String(),
-    };
-  }
-
-  factory Avistamiento.fromMap(Map<String, dynamic> map) {
-    return Avistamiento(
-      id: map['id'],
-      animalId: map['animalId'],
-      lat: map['lat'],
-      lng: map['lng'],
-      foto: map['foto'],
-      etiqueta: EtiquetaAvistamiento.values.byName(map['etiqueta']),
-      fecha: DateTime.parse(map['fecha']),
-    );
-  }
 }

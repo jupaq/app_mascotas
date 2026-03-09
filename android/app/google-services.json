@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "49670848283",
+    "project_id": "mascotas-app-vldv",
+    "storage_bucket": "mascotas-app-vldv.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:49670848283:android:4ba20f454e06ccbfd0ddbe",
+        "android_client_info": {
+          "package_name": "com.example.app_mascotas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCxOfMzcGXzWdoeDHiPKGod83IlFV7gCws"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
