@@ -91,7 +91,7 @@ class _ReportarScreenState extends State<ReportarScreen> {
 
   String textoEspecie(EspecieAnimal especie) {
     switch (especie) {
-        case EspecieAnimal.perro:
+      case EspecieAnimal.perro:
         return "Perro";
       case EspecieAnimal.gato:
         return "Gato";
@@ -100,76 +100,80 @@ class _ReportarScreenState extends State<ReportarScreen> {
     }
   }
 
-Future<void> guardarReporte() async {
-  if (guardando) return;
+  Future<void> guardarReporte() async {
+    if (guardando) return;
 
-  if (especieSeleccionada == null) {
-    mostrarMensaje("Debes seleccionar la especie");
-    return;
-  }
+    if (especieSeleccionada == null) {
+      mostrarMensaje("Debes seleccionar la especie");
+      return;
+    }
 
-  if (estadoSeleccionado == null) {
-    mostrarMensaje("Debes seleccionar el estado del animal");
-    return;
-  }
+    if (estadoSeleccionado == null) {
+      mostrarMensaje("Debes seleccionar el estado del animal");
+      return;
+    }
 
-  if (fotoPath == null) {
-    mostrarMensaje("Debes tomar una foto");
-    return;
-  }
+    if (fotoPath == null) {
+      mostrarMensaje("Debes tomar una foto");
+      return;
+    }
 
-  if (etiquetasSeleccionadas.isEmpty) {
-    mostrarMensaje("Debes seleccionar al menos una etiqueta");
-    return;
-  }
+    if (etiquetasSeleccionadas.isEmpty) {
+      mostrarMensaje("Debes seleccionar al menos una etiqueta");
+      return;
+    }
 
-  setState(() {
-    guardando = true;
-  });
+    setState(() {
+      guardando = true;
+    });
 
-  try {
-    debugPrint("PASO 1: subir imagen");
-    final String urlFoto = await storageService.subirImagen(fotoPath!);
-    debugPrint("OK PASO 1: $urlFoto");
+    try {
+      debugPrint("PASO 1: subir imagen");
+      final String urlFoto = await storageService.subirImagen(fotoPath!);
+      debugPrint("OK PASO 1: $urlFoto");
 
-    debugPrint("PASO 2: crear animal");
-    final String animalId = await firestoreService.crearAnimal(
-      especie: especieSeleccionada!,
-      estado: estadoSeleccionado!,
-      fotoPrincipal: urlFoto,
-    );
-    debugPrint("OK PASO 2: $animalId");
+      debugPrint("PASO 2: crear animal");
+      final String animalId = await firestoreService.crearAnimal(
+        especie: especieSeleccionada!,
+        estado: estadoSeleccionado!,
+        fotoPrincipal: urlFoto,
+      );
+      debugPrint("OK PASO 2: $animalId");
 
-    debugPrint("PASO 3: crear avistamiento");
-    final Avistamiento avistamiento = Avistamiento(
-      id: "",
-      animalId: animalId,
-      lat: widget.lat,
-      lng: widget.lng,
-      foto: urlFoto,
-      etiquetas: etiquetasSeleccionadas,
-      fecha: DateTime.now(),
-    );
+      debugPrint("PASO 3: crear avistamiento");
+      final Avistamiento avistamiento = Avistamiento(
+        id: "",
+        animalId: animalId,
+        lat: widget.lat,
+        lng: widget.lng,
+        foto: urlFoto,
+        etiquetas: etiquetasSeleccionadas,
+        fecha: DateTime.now(),
+      );
 
-    await firestoreService.crearAvistamiento(avistamiento);
-    debugPrint("OK PASO 3");
+      await firestoreService.crearAvistamiento(
+        avistamiento: avistamiento,
+        especie: especieSeleccionada!,
+      );
 
-    if (!mounted) return;
-    Navigator.pop(context);
-  } catch (e, stackTrace) {
-    debugPrint("ERROR AL GUARDAR: $e");
-    debugPrint("STACKTRACE: $stackTrace");
-    mostrarMensaje("Error al guardar: $e");
-  } finally {
-    if (mounted) {
-      setState(() {
-        guardando = false;
-      });
+      debugPrint("OK PASO 3");
+
+      if (!mounted) return;
+
+      mostrarMensaje("Reporte guardado correctamente");
+      Navigator.pop(context);
+    } catch (e, stackTrace) {
+      debugPrint("ERROR AL GUARDAR: $e");
+      debugPrint("STACKTRACE: $stackTrace");
+      mostrarMensaje("Error al guardar: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          guardando = false;
+        });
+      }
     }
   }
-}
-
-
 
   void mostrarMensaje(String texto) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -195,7 +199,6 @@ Future<void> guardarReporte() async {
                 fontWeight: FontWeight.bold,
               ),
             ),
-
             const SizedBox(height: 10),
 
             if (fotoPath != null)
@@ -241,6 +244,7 @@ Future<void> guardarReporte() async {
                 fontWeight: FontWeight.bold,
               ),
             ),
+            const SizedBox(height: 8),
 
             DropdownButtonFormField<EspecieAnimal>(
               value: especieSeleccionada,
@@ -270,7 +274,6 @@ Future<void> guardarReporte() async {
                 fontWeight: FontWeight.bold,
               ),
             ),
-
             const SizedBox(height: 8),
 
             DropdownButtonFormField<EstadoAnimal>(
@@ -301,7 +304,6 @@ Future<void> guardarReporte() async {
                 fontWeight: FontWeight.bold,
               ),
             ),
-
             const SizedBox(height: 8),
 
             ...EtiquetaAvistamiento.values.map((etiqueta) {
